@@ -2,13 +2,11 @@
 //!
 //! This sample demonstrates how to use CSS with gtk-rs.
 
-extern crate gdk;
-extern crate gio;
-extern crate glib;
-extern crate gtk;
-
 use gio::prelude::*;
 use gtk::prelude::*;
+use gtk::{Inhibit, Window, WindowType};
+use relm::{connect, connect_stream, Relm, Update, Widget};
+use relm_derive::Msg;
 
 use std::env::args;
 
@@ -41,47 +39,79 @@ combobox box arrow {
     border-top: 5px solid black;
 }";
 
-fn build_ui(application: &gtk::Application) {
-    let window = gtk::ApplicationWindow::new(application);
+struct Model {}
 
-    window.set_title("CSS");
-    window.set_position(gtk::WindowPosition::Center);
-
-    // The container container.
-    let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-    let label = gtk::Button::new_with_label("hover me!");
-    // We need to name it in order to be able to use its name as a CSS label to
-    // apply CSS on it.
-    gtk::WidgetExt::set_widget_name(&label, "label1");
-
-    let entry = gtk::Entry::new();
-    // We need to name it in order to apply CSS on it.
-    gtk::WidgetExt::set_widget_name(&entry, "entry1");
-    entry.set_text("Some text");
-
-    let combo = gtk::ComboBoxText::new();
-    combo.append_text("option 1");
-    combo.append_text("option 2");
-    combo.append_text("option 3");
-    combo.set_active(Some(0));
-
-    vbox.add(&label);
-    vbox.add(&entry);
-    vbox.add(&combo);
-    // Then we add the container inside our window.
-    window.add(&vbox);
-
-    application.connect_activate(move |_| {
-        window.show_all();
-    });
+#[derive(Msg)]
+enum Msg {
+    // …
+    Quit,
 }
 
-fn main() {
-    let application = gtk::Application::new(Some("com.github.css"), gio::ApplicationFlags::empty())
-        .expect("Initialization failed...");
+struct Win {
+    _model: Model,
+    window: Window,
+}
 
-    application.connect_startup(|app| {
+impl Update for Win {
+    // Specify the model used for this widget.
+    type Model = Model;
+    // Specify the model parameter used to init the model.
+    type ModelParam = ();
+    // Specify the type of the messages sent to the update function.
+    type Msg = Msg;
+
+    // Return the initial model.
+    fn model(_: &Relm<Self>, _: ()) -> Model {
+        Model {}
+    }
+
+    // The model may be updated when a message is received.
+    // Widgets may also be updated in this function.
+    fn update(&mut self, event: Msg) {
+        match event {
+            Msg::Quit => gtk::main_quit(),
+        }
+    }
+}
+
+impl Widget for Win {
+    type Root = Window;
+
+    fn root(&self) -> Self::Root {
+        self.window.clone()
+    }
+
+    fn view(relm: &Relm<Self>, _model: Self::Model) -> Self {
+        let window = Window::new(WindowType::Toplevel);
+
+        window.set_title("CSS");
+        window.set_position(gtk::WindowPosition::Center);
+
+        // The container container.
+        let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        let label = gtk::Button::new_with_label("hover me!");
+        // We need to name it in order to be able to use its name as a CSS label to
+        // apply CSS on it.
+        gtk::WidgetExt::set_name(&label, "label1");
+
+        let entry = gtk::Entry::new();
+        // We need to name it in order to apply CSS on it.
+        gtk::WidgetExt::set_name(&entry, "entry1");
+        entry.set_text("Some text");
+
+        let combo = gtk::ComboBoxText::new();
+        combo.append_text("option 1");
+        combo.append_text("option 2");
+        combo.append_text("option 3");
+        combo.set_active(Some(0));
+
+        vbox.add(&label);
+        vbox.add(&entry);
+        vbox.add(&combo);
+        // Then we add the container inside our window.
+        window.add(&vbox);
+
         // The CSS "magic" happens here.
         let provider = gtk::CssProvider::new();
         provider
@@ -95,9 +125,22 @@ fn main() {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
-        // We build the application UI.
-        build_ui(app);
-    });
+        // Connect the signal `delete_event` to send the `Quit` message.
+        connect!(
+            relm,
+            window,
+            connect_delete_event(_, _),
+            return (Some(Msg::Quit), Inhibit(false))
+        );
+        // There is also a `connect!()` macro for GTK+ events that do not need a
+        // value to be returned in the callback.
 
-    application.run(&args().collect::<Vec<_>>());
+        window.show_all();
+
+        Win { _model, window }
+    }
+}
+
+fn main() {
+    Win::run(()).unwrap();
 }
